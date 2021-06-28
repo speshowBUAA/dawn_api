@@ -4,7 +4,7 @@ import (
     "database/sql"
     _ "github.com/lib/pq"
     "dawn_api/log"
-	// "time"
+    "dawn_api/model"
 	"fmt"
     "go.uber.org/zap"
 )
@@ -26,16 +26,6 @@ func checkErr(err error) {
 	}
 }
 
-type User struct{
-	id               int
-	name             string
-	phone            string
-	email            string
-	create_time      string
-	last_login_time  string
-	avatar_url       string
-}
-
 func NewDawnApiDataClient() {
 	psqlInfo :=  fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable password=%s port=%d",
 	host,user,dbname,password,port)
@@ -48,13 +38,58 @@ func NewDawnApiDataClient() {
 }
 
 
-func Query(key string, value string) User{
-	var user User
-    sqlStatement := fmt.Sprintf("SELECT * FROM public.users WHERE %s = '%s' ORDER BY id DESC LIMIT 1" , key, value)
-	fmt.Println(sqlStatement)
-	row := DawnApiDataClient.QueryRow(sqlStatement)
-    row.Scan(&user.id, &user.name, &user.phone, &user.email, &user.create_time, &user.last_login_time, &user.avatar_url)
-    return user
+func Query(key string, value string) []model.User{
+	var users []model.User
+    sqlStatement := fmt.Sprintf("SELECT * FROM public.dawn_users WHERE %s = '%s'" , key, value)
+
+    rows, err := DawnApiDataClient.Query(sqlStatement)
+    checkErr(err)
+    
+    for rows.Next() {
+        var user model.User
+        rows.Scan(&user.Id, &user.Name, &user.Email, &user.Phone, &user.Password, &user.Permission, &user.Last_login_time, &user.Create_time, &user.Avatar_url)
+        users = append(users, user)
+    }
+    
+    return users
+}
+
+func FilterQuery(param model.FilterParam) []model.User{
+    var users []model.User
+    sqlStatement := fmt.Sprintf(
+        "SELECT * FROM public.dawn_users WHERE username like '%s' and useremail like '%s' and permission in (%s) and create_time > '%s' and create_time < '%s' and last_login_time > '%s' and last_login_time < '%s'", 
+        param.UserName, param.UserEmail, param.Permission, param.StartCreateDate,
+        param.EndCreateDate, param.StartLoginTime, param.EndLoginTime)
+    rows, err := DawnApiDataClient.Query(sqlStatement)
+    checkErr(err)
+    
+    for rows.Next() {
+        var user model.User
+        rows.Scan(&user.Id, &user.Name, &user.Email, &user.Phone, &user.Password, &user.Permission, &user.Last_login_time, &user.Create_time, &user.Avatar_url)
+        users = append(users, user)
+    }
+    
+    return users
+}
+
+func UpdateUserInfo(user model.User) error {
+    sqlStatement := fmt.Sprintf("UPDATE public.dawn_users SET useremail=$1,usermobile=$2,password=$3,permission=$4,last_login_time=NOW(),avatar_url=$5 WHERE id = $6")
+    stmt, err := DawnApiDataClient.Prepare(sqlStatement)
+    checkErr(err)
+
+    _, err = stmt.Exec(user.Email, user.Phone, user.Password, user.Permission, user.Avatar_url, user.Id)
+    checkErr(err)
+    return err
+}
+
+func AddUserInfo(user model.User) error {
+    sqlStatement := fmt.Sprintf("INSERT INTO public.dawn_users (username,useremail,usermobile,password,create_time,avatar_url) VALUES($1,$2,$3,$4,NOW(),$5)")
+    stmt, err := DawnApiDataClient.Prepare(sqlStatement)
+    checkErr(err)
+
+    _, err = stmt.Exec(user.Name, user.Email, user.Phone, user.Password, user.Avatar_url)
+    checkErr(err)
+    return err
 }
 
 func CloseConnect(){

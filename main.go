@@ -4,14 +4,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"dawn_api/router"
 	"dawn_api/db"
-	"fmt"
+	"dawn_api/middleware"
 )
 
 func main() {
 	db.NewDawnApiDataClient()
-	fmt.Println(db.Query("id", "1"))
+	db.NewMongoDBClient()
 	
-	listern := gin.Default()
-	listern.POST("/api/login/account", router.TrajectoryCallback)
-	listern.Run(":3000")
+	listener := gin.Default()
+
+	r := listener.Group("/api")
+	r.Use(jwt.JWTAuth())
+	r.GET("/currentUser", router.CurrentUser)
+	r.GET("/getUsers", router.GetUsers)
+	r.POST("/saveAnnotation", router.SaveAnnotationCallback)
+
+	listener.POST("/login/account", router.Login)
+	listener.POST("/login/regist", router.RegisterUser)
+
+	listener.Run(":3000")
 }
